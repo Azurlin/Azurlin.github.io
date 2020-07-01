@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><meta name="generator" content="Hexo 4.2.1"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"><meta><title>MapReduce之Shuffle - Azurlin&#039;s blog</title><meta description="Map端的Shuffle map方法在产生数据之后，并不是直接把数据发送个ReduceTask,而是先将数据临时存储到缓冲区中。 在缓冲区中会进行分区（partition）、排序（sort），如果指定了Combiner还会进行combine。 每一个MapTask都会自带一个缓冲区。缓冲区维系在内存中，默认大小是100M。 当缓冲区使用达到阈值(默认0.8)的时候，会产生溢写（spill）,将数据"><meta property="og:type" content="blog"><meta property="og:title" content="MapReduce之Shuffle"><meta property="og:url" content="http://yoursite.com/2020/07/01/BigData/MapReduce/MapReduce%E4%B9%8BShuffle/"><meta property="og:site_name" content="Azurlin&#039;s blog"><meta property="og:description" content="Map端的Shuffle map方法在产生数据之后，并不是直接把数据发送个ReduceTask,而是先将数据临时存储到缓冲区中。 在缓冲区中会进行分区（partition）、排序（sort），如果指定了Combiner还会进行combine。 每一个MapTask都会自带一个缓冲区。缓冲区维系在内存中，默认大小是100M。 当缓冲区使用达到阈值(默认0.8)的时候，会产生溢写（spill）,将数据"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="http://yoursite.com/img/og_image.png"><meta property="article:published_time" content="2020-07-01T10:20:39.000Z"><meta property="article:modified_time" content="2020-07-01T09:20:13.707Z"><meta property="article:author" content="Azurlin"><meta property="article:tag" content="大数据"><meta property="article:tag" content="学习笔记"><meta property="article:tag" content="MapReduce"><meta property="twitter:card" content="summary"><meta property="twitter:image" content="/img/og_image.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"http://yoursite.com/2020/07/01/BigData/MapReduce/MapReduce%E4%B9%8BShuffle/"},"headline":"Azurlin's blog","image":["http://yoursite.com/img/og_image.png"],"datePublished":"2020-07-01T10:20:39.000Z","dateModified":"2020-07-01T09:20:13.707Z","author":{"@type":"Person","name":"Azurlin"},"description":"Map端的Shuffle map方法在产生数据之后，并不是直接把数据发送个ReduceTask,而是先将数据临时存储到缓冲区中。 在缓冲区中会进行分区（partition）、排序（sort），如果指定了Combiner还会进行combine。 每一个MapTask都会自带一个缓冲区。缓冲区维系在内存中，默认大小是100M。 当缓冲区使用达到阈值(默认0.8)的时候，会产生溢写（spill）,将数据"}</script><link rel="canonical" href="http://yoursite.com/2020/07/01/BigData/MapReduce/MapReduce%E4%B9%8BShuffle/"><link rel="icon" href="/img/favicon.svg"><link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.0/css/all.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@9.12.0/styles/atom-one-light.css"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro"><link rel="stylesheet" href="/css/default.css"><style>body>.footer,body>.navbar,body>.section{opacity:0}</style><!--!--><!--!--><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@1.6.8/dist/css/lightgallery.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justifiedGallery@3.7.0/dist/css/justifiedGallery.min.css"><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/pace-js@1.0.2/pace.min.js"></script></head><body class="is-2-column"><nav class="navbar navbar-main"><div class="container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.svg" alt="Azurlin&#039;s blog" height="28"></a></div><div class="navbar-menu"><div class="navbar-start"><a class="navbar-item" href="/">主页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/Azurlin"><i class="fab fa-github"></i></a><a class="navbar-item is-hidden-tablet catalogue" title="目录" href="javascript:;"><i class="fas fa-list-ul"></i></a><a class="navbar-item search" title="搜索" href="javascript:;"><i class="fas fa-search"></i></a></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-8-tablet is-8-desktop is-8-widescreen"><div class="card"><article class="card-content article" role="article"><div class="article-meta size-small is-uppercase level is-mobile"><div class="level-left"><time class="level-item" dateTime="2020-07-01T10:20:39.000Z" title="2020-07-01T10:20:39.000Z">2020-07-01</time><span class="level-item"><a class="link-muted" href="/categories/MapReduce/">MapReduce</a></span><span class="level-item">9 分钟 读完 (大约 1398 个字)</span></div></div><h1 class="title is-3 is-size-4-mobile">MapReduce之Shuffle</h1><div class="content"><h2 id="Map端的Shuffle"><a href="#Map端的Shuffle" class="headerlink" title="Map端的Shuffle"></a>Map端的Shuffle</h2><ol>
+<li>map方法在产生数据之后，并不是直接把数据发送个ReduceTask,而是先将数据临时存储到缓冲区中。</li>
+<li>在缓冲区中会进行分区（partition）、排序（sort），如果指定了Combiner还会进行combine。</li>
+<li>每一个MapTask都会自带一个缓冲区。缓冲区维系在内存中，默认大小是100M。</li>
+<li>当缓冲区使用达到<strong>阈值(默认0.8)</strong>的时候，会产生<code>溢写（spill）</code>,将数据溢写到磁盘中并生成<code>溢写文件</code>。</li>
+<li>溢写之后，新来的数据依然是写到缓冲区中，如果再次达到阈值会产生溢写，每一次溢写都会生成新的溢写文件。单个溢写文件是分区并且有序的。</li>
+<li>当MapTask处理完所有数据后会将所有的溢写文件合并(merge 不改变数据量)到一个文件中，生成<code>结果文件(final out)</code>。如果缓冲区存在数据，则会一起merge到final out中。<strong>无论如何都会产生final out</strong>。</li>
+<li>在merge过程中会对数据再次进行分区排序，最后的final out一定是分区且有序的。<a id="more"></a> </li>
+<li>注意:<ol>
+<li>缓冲区本质上是一个<strong>环形字节数组</strong>，条形容器如果想要重复使用是需要重复寻址的，而环状则避免了重复寻址的过程。</li>
+<li>阈值的作用是为了<strong>减少阻塞</strong>，当使用量达到阈值时，便开始从头部溢写，这样即便后来的数据在环形容器中覆盖了头部也不会丢失数据。</li>
+<li><strong>溢写过程不一定产生</strong>。要看map处理完后是否达到阈值。</li>
+<li><strong>溢写次数与原始数据量大小无关</strong>数据量大小跟溢写次数没有关系，map处理完后达到阈值才会产生溢写。</li>
+<li><strong>溢写文件的大小要考虑序列化的过程</strong>。 从内存到磁盘有一个序列化的过程，这个过程发生在触发溢写之后，序列化过程中可能丢弃一些不需要的数据或者添加一些数据，最终生成的溢写文件可能小于阈值也可能大于阈值。</li>
+</ol>
+</li>
+<li>两次排序：<br>整个过程会发生两次排序，这两次排序是不同的。第一次发生在缓冲区中，数据是从完全杂乱的到有序的状态这个过程采用的是<strong>快速排序</strong>，第二次各个有序的部分的排序，是从局部有序到整体有序，这个过程采用的是<strong>归并排序</strong>。</li>
+</ol>
+<h2 id="Reduce端的Shuffle"><a href="#Reduce端的Shuffle" class="headerlink" title="Reduce端的Shuffle"></a>Reduce端的Shuffle</h2><ol>
+<li>当达到<strong>启动阈值</strong>（默认0.05，当5%的MapTask结束）的时候，ReduceTask就会启动抓取MapTask的数据。</li>
+<li>ReduceTask启动fetch线程（每个ReduceTack默认最多启动五个fetch线程）通过get请求（携带分区信号）的方式来抓取数据，抓取数据时只抓取当前要处理的分区的数据。</li>
+<li>ReduceTask会将抓取来的每一段数据临时存储到本地磁盘上，抓取完成之后，会通过merge操作将这些临时文件合并成一个总的文件。在merge的过程中，会再次对数据排序。这次排序采用的是归并排序。</li>
+<li>merge操作完成后，就将这个文件中相同的键对应的值分到一组去，形成一个<strong>伪迭代器</strong>（reduce中的迭代是在读取文件的时候发生的，控制指针从文件逐行读取数据，因为数据是经过排序的相同的key依次排列下来，通过比较相同的key分到一组遇到不同则开启新一轮的reduce。只有指针没有容器，因此Reduce中的迭代器只能使用一次，当指针移动之后便不能再次重复使用了–这么设计的原因是考虑到数据量大的情况，是迭代设计模式的应用）。这个过程被称为分组。</li>
+<li>注意问题：<ol>
+<li>设置启动阈值的目的是为了提高执行效率节省时间。</li>
+<li>merge factor（合并因子）默认是10，即每十个小文件合并一次（如果文件个数超过merge因子，那么最终需要整理成merge因子大小再进行合并。），最终合并成一个总的文件。</li>
+</ol>
+</li>
+</ol>
+<h2 id="Shuffle的优化"><a href="#Shuffle的优化" class="headerlink" title="Shuffle的优化"></a>Shuffle的优化</h2><p>与磁盘的交互会大大降低效率，为了提高性能要通过各种方案减小与磁盘的交互。</p>
+<ol>
+<li><strong>增大缓冲区</strong>，实际开发中缓冲区一般是250M~400M。</li>
+<li>增大溢写阈值，可能导致阻塞的风险增加（不建议）。</li>
+<li><strong>增加Combine过程</strong>。通过合并减少数据体量。</li>
+<li><strong>考虑将final out压缩之后再传输</strong>。但是解压和压缩需要耗费时间和CPU，这种方案是在网络资源和压缩时间的取舍。</li>
+<li>调节ReduceTask的启动阈值（不建议）。文件大小数量不确定需要根据实际情况而定。</li>
+<li><strong>适当增加fetch线程的数量</strong>。一般在5000~10000之间</li>
+<li>可以考虑调大merge因子（不建议）。</li>
+</ol>
+</div><div class="article-tags size-small mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE/">大数据</a><a class="link-muted mr-2" rel="tag" href="/tags/%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/">学习笔记</a><a class="link-muted mr-2" rel="tag" href="/tags/MapReduce/">MapReduce</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/2020/07/01/BigData/MapReduce/MapReduce%E6%A1%88%E4%BE%8B01/"><span class="level-item">MapReduce案例:可能认识的人</span><i class="level-item fas fa-chevron-right"></i></a></div></nav><div class="card"><div class="card-content"><h3 class="title is-5">评论</h3><div class="content" id="valine-thread"></div><script src="//cdn1.lncld.net/static/js/3.0.4/av-min.js"></script><script src="https://cdn.jsdelivr.net/npm/valine@1.4.14/dist/Valine.min.js"></script><script>new Valine({
+            el: '#valine-thread' ,
+            appId: "vT8sFdsDv5VGpR7w7Wo0lyRb-gzGzoHsz",
+            appKey: "MNAIdynlAB9EhdmY7lgJJyYo",
+            
+            avatar: "mm",
+            
+            meta: ["nick","mail","link"],
+            pageSize: 10,
+            lang: "zh-CN",
+            
+            highlight: true,
+            
+            
+            
+            
+            
+            requiredFields: [],
+        });</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-4-widescreen  order-1 is-sticky"><div class="card widget" id="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="is-flex" href="#Map端的Shuffle"><span class="mr-2">1</span><span>Map端的Shuffle</span></a></li><li><a class="is-flex" href="#Reduce端的Shuffle"><span class="mr-2">2</span><span>Reduce端的Shuffle</span></a></li><li><a class="is-flex" href="#Shuffle的优化"><span class="mr-2">3</span><span>Shuffle的优化</span></a></li></ul></div></div></div><div class="card widget"><div class="card-content"><div class="menu"><h3 class="menu-label">分类</h3><ul class="menu-list"><li><a class="level is-mobile is-marginless" href="/categories/Hadoop/"><span class="level-start"><span class="level-item">Hadoop</span></span><span class="level-end"><span class="level-item tag">1</span></span></a></li><li><a class="level is-mobile is-marginless" href="/categories/MapReduce/"><span class="level-start"><span class="level-item">MapReduce</span></span><span class="level-end"><span class="level-item tag">3</span></span></a></li><li><a class="level is-mobile is-marginless" href="/categories/Zookeeper/"><span class="level-start"><span class="level-item">Zookeeper</span></span><span class="level-end"><span class="level-item tag">2</span></span></a></li></ul></div></div></div><div class="card widget"><div class="card-content"><div class="menu"><h3 class="menu-label">标签</h3><div class="field is-grouped is-grouped-multiline"><div class="control"><a class="tags has-addons" href="/tags/Hadoop/"><span class="tag">Hadoop</span><span class="tag is-grey-lightest">1</span></a></div><div class="control"><a class="tags has-addons" href="/tags/MapReduce/"><span class="tag">MapReduce</span><span class="tag is-grey-lightest">3</span></a></div><div class="control"><a class="tags has-addons" href="/tags/Zookeeper/"><span class="tag">Zookeeper</span><span class="tag is-grey-lightest">2</span></a></div><div class="control"><a class="tags has-addons" href="/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE/"><span class="tag">大数据</span><span class="tag is-grey-lightest">4</span></a></div><div class="control"><a class="tags has-addons" href="/tags/%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/"><span class="tag">学习笔记</span><span class="tag is-grey-lightest">5</span></a></div></div></div></div></div></div><!--!--></div></div></section><footer class="footer"><div class="container"><div class="level"><div class="level-start"><a class="footer-logo is-block mb-2" href="/"><img src="/img/logo.svg" alt="Azurlin&#039;s blog" height="28"></a><p class="size-small"><span>&copy; 2020 Azurlin</span>  Powered by <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a> &amp; <a href="https://github.com/ppoffice/hexo-theme-icarus" target="_blank" rel="noopener">Icarus</a></p></div><div class="level-end"><div class="field has-addons"><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Creative Commons" href="https://creativecommons.org/"><i class="fab fa-creative-commons"></i></a></p><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Attribution 4.0 International" href="https://creativecommons.org/licenses/by/4.0/"><i class="fab fa-creative-commons-by"></i></a></p><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Download on GitHub" href="https://github.com/ppoffice/hexo-theme-icarus"><i class="fab fa-github"></i></a></p></div></div></div></div></footer><script src="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/moment@2.22.2/min/moment-with-locales.min.js"></script><script>moment.locale("zh-CN");</script><script>var IcarusThemeSettings = {
+            site: {
+                url: 'http://yoursite.com',
+                external_link: {"enable":true,"exclude":[]}
+            },
+            article: {
+                highlight: {
+                    clipboard: true,
+                    fold: 'unfolded'
+                }
+            }
+        };</script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.4/dist/clipboard.min.js" defer></script><script src="/js/animation.js"></script><a id="back-to-top" title="回到顶端" href="javascript:;"><i class="fas fa-chevron-up"></i></a><script src="/js/back_to_top.js" defer></script><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@1.6.8/dist/js/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/justifiedGallery@3.7.0/dist/js/jquery.justifiedGallery.min.js" defer></script><script>window.addEventListener("load", () => {
+            if (typeof $.fn.lightGallery === 'function') {
+                $('.article').lightGallery({ selector: '.gallery-item' });
+            }
+            if (typeof $.fn.justifiedGallery === 'function') {
+                if ($('.justified-gallery > p > .gallery-item').length) {
+                    $('.justified-gallery > p > .gallery-item').unwrap();
+                }
+                $('.justified-gallery').justifiedGallery();
+            }
+        });</script><!--!--><!--!--><!--!--><script src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script src="/js/insight.js" defer></script><script>document.addEventListener('DOMContentLoaded', function () {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        });</script></body></html>
