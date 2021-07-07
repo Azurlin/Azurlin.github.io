@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><meta name="generator" content="Hexo 4.2.1"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"><meta><title>死锁的原因以及避免死锁 - Azurlin&#039;s Blog</title><meta description="什么是死锁死锁是多个进程在运行过程中因为竞争资源而陷入无限等待的僵局。在一组死锁的进程中，每一个进程都在等待其他进程释放占用的资源，所以都无法继续运行，也就无法释放他们占用的资源，因此这组进程只能无限的等待下去。"><meta property="og:type" content="blog"><meta property="og:title" content="死锁的原因以及避免死锁"><meta property="og:url" content="http://yoursite.com/2020/06/28/os/%E6%AD%BB%E9%94%81/"><meta property="og:site_name" content="Azurlin&#039;s Blog"><meta property="og:description" content="什么是死锁死锁是多个进程在运行过程中因为竞争资源而陷入无限等待的僵局。在一组死锁的进程中，每一个进程都在等待其他进程释放占用的资源，所以都无法继续运行，也就无法释放他们占用的资源，因此这组进程只能无限的等待下去。"><meta property="og:locale" content="zh_CN"><meta property="og:image" content="http://yoursite.com/img/og_image.png"><meta property="article:published_time" content="2020-06-28T06:10:39.000Z"><meta property="article:modified_time" content="2021-07-07T13:23:08.511Z"><meta property="article:author" content="Azurlin"><meta property="article:tag" content="学习笔记"><meta property="article:tag" content="计算机操作系统"><meta property="twitter:card" content="summary"><meta property="twitter:image" content="/img/og_image.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"http://yoursite.com/2020/06/28/os/%E6%AD%BB%E9%94%81/"},"headline":"Azurlin's Blog","image":["http://yoursite.com/img/og_image.png"],"datePublished":"2020-06-28T06:10:39.000Z","dateModified":"2021-07-07T13:23:08.511Z","author":{"@type":"Person","name":"Azurlin"},"description":"什么是死锁死锁是多个进程在运行过程中因为竞争资源而陷入无限等待的僵局。在一组死锁的进程中，每一个进程都在等待其他进程释放占用的资源，所以都无法继续运行，也就无法释放他们占用的资源，因此这组进程只能无限的等待下去。"}</script><link rel="canonical" href="http://yoursite.com/2020/06/28/os/%E6%AD%BB%E9%94%81/"><link rel="icon" href="/img/favicon.svg"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.14.0/css/all.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@9.12.0/styles/atom-one-light.css"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;600&amp;family=Source+Code+Pro"><link rel="stylesheet" href="/css/default.css"><style>body>.footer,body>.navbar,body>.section{opacity:0}</style><!--!--><!--!--><!--!--><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@1.6.8/dist/css/lightgallery.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/justifiedGallery@3.7.0/dist/css/justifiedGallery.min.css"><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/pace-js@1.0.2/pace.min.js"></script></head><body class="is-2-column"><nav class="navbar navbar-main"><div class="container"><div class="navbar-brand justify-content-center"><a class="navbar-item navbar-logo" href="/"><img src="/img/logo.svg" alt="Azurlin&#039;s Blog" height="28"></a></div><div class="navbar-menu"><div class="navbar-start"><a class="navbar-item" href="/">主页</a><a class="navbar-item" href="/archives">归档</a><a class="navbar-item" href="/categories">分类</a><a class="navbar-item" href="/tags">标签</a></div><div class="navbar-end"><a class="navbar-item" target="_blank" rel="noopener" title="GitHub" href="https://github.com/Azurlin"><i class="fab fa-github"></i></a><a class="navbar-item is-hidden-tablet catalogue" title="目录" href="javascript:;"><i class="fas fa-list-ul"></i></a><a class="navbar-item search" title="搜索" href="javascript:;"><i class="fas fa-search"></i></a></div></div></div></nav><section class="section"><div class="container"><div class="columns"><div class="column order-2 column-main is-9-tablet is-7-desktop is-8-widescreen"><div class="card"><article class="card-content article" role="article"><div class="article-meta size-small is-uppercase level is-mobile"><div class="level-left"><time class="level-item" dateTime="2020-06-28T06:10:39.000Z" title="2020-06-28T06:10:39.000Z">2020-06-28</time><span class="level-item"><a class="link-muted" href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/">计算机操作系统</a></span><span class="level-item">10 分钟 读完 (大约 1472 个字)</span></div></div><h1 class="title is-3 is-size-4-mobile">死锁的原因以及避免死锁</h1><div class="content"><h2 id="什么是死锁"><a href="#什么是死锁" class="headerlink" title="什么是死锁"></a>什么是死锁</h2><p>死锁是多个进程在运行过程中因为竞争资源而陷入无限等待的僵局。在一组死锁的进程中，每一个进程都在等待其他进程释放占用的资源，所以都无法继续运行，也就无法释放他们占用的资源，因此这组进程只能无限的等待下去。</p>
+<a id="more"></a>
+
+<h2 id="产生死锁的原因"><a href="#产生死锁的原因" class="headerlink" title="产生死锁的原因"></a>产生死锁的原因</h2><ol>
+<li>竞争不可抢占性资源引起死锁</li>
+<li>竞争可消耗资源引起死锁</li>
+<li>进程推进顺序不当</li>
+</ol>
+<h2 id="产生死锁的必要条件"><a href="#产生死锁的必要条件" class="headerlink" title="产生死锁的必要条件"></a>产生死锁的必要条件</h2><ol>
+<li>互斥条件：在一段时间内，某一项资源只能被一个进程占用。其他资源如果需要这项资源只能等待占用该资源的进程释放。</li>
+<li>请求和保持条件：进程在已经<strong>保持</strong>了一个资源的同时又提出新的资源<strong>请求</strong>。而新请求的资源正被其他进程占用。</li>
+<li>不可抢占条件：进程已经获得的资源在使用完之前不能被其他进程抢占。</li>
+<li>循环等待条件：发生死锁时必然存在一组进程，并且这组进程中的每个进程都在等待其他进程占用的资源。</li>
+</ol>
+<h2 id="处理死锁的方法"><a href="#处理死锁的方法" class="headerlink" title="处理死锁的方法"></a>处理死锁的方法</h2><ol>
+<li>预防死锁：通过破坏死锁产生的必要条件来预防死锁。</li>
+<li>避免死锁：通过某种方法使系统保持在安全状态。</li>
+<li>检测死锁：允许产生死锁，当检测到发生死锁时采取适当措施解除死锁。</li>
+<li>解除死锁：常用方法是杀死一些进程回收资源，然后将这些资源分配给其他处于阻塞状态的进程。</li>
+</ol>
+<h3 id="预防死锁"><a href="#预防死锁" class="headerlink" title="预防死锁"></a>预防死锁</h3><ol>
+<li>破坏请求和保持条件</li>
+</ol>
+<ul>
+<li>一次性分配，进程在开始运行前一次性申请所需的全部资源。系统要么分配进程所需的资源要么一点资源都不分配。</li>
+<li>先申请初期所需的资源，然后在运行过程中逐步释放占用的资源，释放完毕后再请求新的资源。</li>
+</ul>
+<ol start="2">
+<li><p>破坏不可抢占条件</p>
+<p>当一个进程已经占用了一些不可被抢占的资源，并且请求新的资源不能被满足时，要求该进程释放已经占用的所有资源，等到需要时再重新申请。</p>
+</li>
+<li><p>破坏循环等待条件</p>
+<p>对系统所有资源类型进行排序并编号，要求进程必须按照序号递增的顺序请求资源。当进程同时需要资源A和B时，由于B的序号大于A，那么进程不许先申请A资源，再申请B资源。如果进程已经获取了B资源又需要A资源或者其他小序号资源时，就需要先释放所有序号更高的资源再去申请序号低的资源。</p>
+</li>
+</ol>
+<h3 id="避免死锁"><a href="#避免死锁" class="headerlink" title="避免死锁"></a>避免死锁</h3><p>通过银行家算法使系统保持安全状态从而避免死锁。银行家算法最重要的部分是其中的<strong>安全性算法</strong>。</p>
+<p><strong>银行家算法</strong></p>
+<ol>
+<li><p>可利用资源向量Available，数组，其中每一个元素代表可利用的资源数目。</p>
+</li>
+<li><p>最大需求矩阵Max，n×m矩阵，表示n个进程中每一个进程对m类资源的最大需求数。</p>
+</li>
+<li><p>分配矩阵Allocation，n×m矩阵，表示每一类资源当前已经分配给每个进程的资源数量。</p>
+</li>
+<li><p>需求矩阵Need，n×m矩阵，表示每一个进程还需要各类资源数。 </p>
+</li>
+</ol>
+<p>存在下述关系：</p>
+<blockquote>
+<p>Need[i,j] = Max[i,j] - Allocation[i,j]</p>
+</blockquote>
+<p><strong>步骤：</strong></p>
+<p>假设Request_i是进程P_i的请求向量，如果Request_i[j] = K，表示进程P_i需要K个R_j类型的资源。当P_i发出资源请求后，系统按下述步骤检查：</p>
+<ol>
+<li><p>如果Request_i[j] &lt;= Need[i,j]，转向步骤2；否则视为出错。</p>
+</li>
+<li><p>如果Request_i[j] &lt;= Available[j]，转向步骤3；否则表示尚无足够资源需要等待。</p>
+</li>
+<li><p>尝试将资源分配给进程P_i，并进行如下操作：</p>
+<p>Available[j] = Available[j] - Request_i[j] </p>
+<p>Allocation[i,j] = Allocation[i,j] + Request_i[j] </p>
+<p>Need[i,j] = Need[i,j] - Request_i[j]  </p>
+</li>
+<li><p>执行<strong>安全性算法</strong>，检查此次资源分配后系统是否处于安全状态。如果安全则正式分配资源，否则恢复原来的资源分配状态，使P_i进程等待。</p>
+</li>
+</ol>
+<p><strong>安全性算法：</strong></p>
+<ol>
+<li><p>设置两个向量：</p>
+<p>①工作向量Work，表示系统可提供给进程继续运行所需的各类资源数，初始Work = Available。</p>
+<p>②Finish，表示系统是否有足够的资源分配。初始Finish[i] = false；如果有足够的资源分配，令Finish[i] = true。</p>
+</li>
+<li><p>从进程集合中找到一个能满足下述条件的进程：</p>
+<p>①Finish[i] = false</p>
+<p>②Need[i,j] &lt;= Work[j]</p>
+<p>如果找到则执行步骤3，否则执行步骤4。</p>
+</li>
+<li><p>当进程P_i获得资源后执行完毕并释放资源，所以执行：</p>
+<p>Work[j] = Work[j] + Allocation[i,j]</p>
+<p>Finish[i] = true</p>
+<p>跳转到步骤2。</p>
+</li>
+<li><p>如果所有进程的Finish[i] = true都满足，则表示系统处于安全状态。否则处于不安全状态。</p>
+</li>
+</ol>
+<h3 id="死锁的检测与解除"><a href="#死锁的检测与解除" class="headerlink" title="死锁的检测与解除"></a>死锁的检测与解除</h3><p>如果在系统中没有采取预防或者避免死锁的措施，可以通过死锁检测与死锁解除算法来解决死锁问题。</p>
+</div><div class="article-tags size-small mb-4"><span class="mr-2">#</span><a class="link-muted mr-2" rel="tag" href="/tags/%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/">学习笔记</a><a class="link-muted mr-2" rel="tag" href="/tags/%E8%AE%A1%E7%AE%97%E6%9C%BA%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/">计算机操作系统</a></div><!--!--></article></div><!--!--><nav class="post-navigation mt-4 level is-mobile"><div class="level-start"><a class="article-nav-prev level level-item link-muted" href="/2020/06/29/BigData/MapReduce/MapReduce%E5%9C%A8Windows%E4%B8%8B%E7%9A%84%E5%85%BC%E5%AE%B9%E9%97%AE%E9%A2%98/"><i class="level-item fas fa-chevron-left"></i><span class="level-item">MapReduce在Windows下的兼容问题</span></a></div><div class="level-end"><a class="article-nav-next level level-item link-muted" href="/2020/06/25/BigData/Zookeeper/Zookeeper%E9%9B%86%E7%BE%A4/"><span class="level-item">Zookeeper集群</span><i class="level-item fas fa-chevron-right"></i></a></div></nav><div class="card"><div class="card-content"><h3 class="title is-5">评论</h3><div class="content" id="valine-thread"></div><script src="//cdn1.lncld.net/static/js/3.0.4/av-min.js"></script><script src="https://cdn.jsdelivr.net/npm/valine@1.4.14/dist/Valine.min.js"></script><script>new Valine({
+            el: '#valine-thread' ,
+            appId: "vT8sFdsDv5VGpR7w7Wo0lyRb-gzGzoHsz",
+            appKey: "MNAIdynlAB9EhdmY7lgJJyYo",
+            
+            avatar: "mm",
+            
+            meta: ["nick","mail","link"],
+            pageSize: 10,
+            lang: "zh-CN",
+            
+            highlight: true,
+            
+            
+            
+            
+            
+            requiredFields: [],
+        });</script></div></div></div><div class="column column-left is-4-tablet is-4-desktop is-4-widescreen  order-1 is-sticky"><div class="card widget" id="toc"><div class="card-content"><div class="menu"><h3 class="menu-label">目录</h3><ul class="menu-list"><li><a class="is-flex" href="#什么是死锁"><span class="mr-2">1</span><span>什么是死锁</span></a></li><li><a class="is-flex" href="#产生死锁的原因"><span class="mr-2">2</span><span>产生死锁的原因</span></a></li><li><a class="is-flex" href="#产生死锁的必要条件"><span class="mr-2">3</span><span>产生死锁的必要条件</span></a></li><li><a class="is-flex" href="#处理死锁的方法"><span class="mr-2">4</span><span>处理死锁的方法</span></a><ul class="menu-list"><li><a class="is-flex" href="#预防死锁"><span class="mr-2">4.1</span><span>预防死锁</span></a></li><li><a class="is-flex" href="#避免死锁"><span class="mr-2">4.2</span><span>避免死锁</span></a></li><li><a class="is-flex" href="#死锁的检测与解除"><span class="mr-2">4.3</span><span>死锁的检测与解除</span></a></li></ul></li></ul></div></div></div><div class="card widget"><div class="card-content"><div class="menu"><h3 class="menu-label">分类</h3><ul class="menu-list"><li><a class="level is-mobile is-marginless" href="/categories/Hadoop/"><span class="level-start"><span class="level-item">Hadoop</span></span><span class="level-end"><span class="level-item tag">2</span></span></a></li><li><a class="level is-mobile is-marginless" href="/categories/MapReduce/"><span class="level-start"><span class="level-item">MapReduce</span></span><span class="level-end"><span class="level-item tag">3</span></span></a></li><li><a class="level is-mobile is-marginless" href="/categories/Zookeeper/"><span class="level-start"><span class="level-item">Zookeeper</span></span><span class="level-end"><span class="level-item tag">2</span></span></a></li><li><a class="level is-mobile is-marginless" href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/"><span class="level-start"><span class="level-item">计算机操作系统</span></span><span class="level-end"><span class="level-item tag">1</span></span></a></li></ul></div></div></div><div class="card widget"><div class="card-content"><div class="menu"><h3 class="menu-label">标签</h3><div class="field is-grouped is-grouped-multiline"><div class="control"><a class="tags has-addons" href="/tags/AVRO/"><span class="tag">AVRO</span><span class="tag is-grey-lightest">1</span></a></div><div class="control"><a class="tags has-addons" href="/tags/Hadoop/"><span class="tag">Hadoop</span><span class="tag is-grey-lightest">1</span></a></div><div class="control"><a class="tags has-addons" href="/tags/MapReduce/"><span class="tag">MapReduce</span><span class="tag is-grey-lightest">3</span></a></div><div class="control"><a class="tags has-addons" href="/tags/Zookeeper/"><span class="tag">Zookeeper</span><span class="tag is-grey-lightest">2</span></a></div><div class="control"><a class="tags has-addons" href="/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE/"><span class="tag">大数据</span><span class="tag is-grey-lightest">5</span></a></div><div class="control"><a class="tags has-addons" href="/tags/%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/"><span class="tag">学习笔记</span><span class="tag is-grey-lightest">7</span></a></div><div class="control"><a class="tags has-addons" href="/tags/%E8%AE%A1%E7%AE%97%E6%9C%BA%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/"><span class="tag">计算机操作系统</span><span class="tag is-grey-lightest">1</span></a></div></div></div></div></div></div><!--!--></div></div></section><footer class="footer"><div class="container"><div class="level"><div class="level-start"><a class="footer-logo is-block mb-2" href="/"><img src="/img/logo.svg" alt="Azurlin&#039;s Blog" height="28"></a><p class="size-small"><span>&copy; 2021 Azurlin</span>  Powered by <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a> &amp; <a href="https://github.com/ppoffice/hexo-theme-icarus" target="_blank" rel="noopener">Icarus</a></p></div><div class="level-end"><div class="field has-addons"><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Creative Commons" href="https://creativecommons.org/"><i class="fab fa-creative-commons"></i></a></p><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Attribution 4.0 International" href="https://creativecommons.org/licenses/by/4.0/"><i class="fab fa-creative-commons-by"></i></a></p><p class="control"><a class="button is-transparent is-large" target="_blank" rel="noopener" title="Download on GitHub" href="https://github.com/ppoffice/hexo-theme-icarus"><i class="fab fa-github"></i></a></p></div></div></div></div></footer><script src="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/moment@2.22.2/min/moment-with-locales.min.js"></script><script>moment.locale("zh-CN");</script><script>var IcarusThemeSettings = {
+            site: {
+                url: 'http://yoursite.com',
+                external_link: {"enable":true,"exclude":[]}
+            },
+            article: {
+                highlight: {
+                    clipboard: true,
+                    fold: 'unfolded'
+                }
+            }
+        };</script><script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.4/dist/clipboard.min.js" defer></script><script src="/js/animation.js"></script><a id="back-to-top" title="回到顶端" href="javascript:;"><i class="fas fa-chevron-up"></i></a><script src="/js/back_to_top.js" defer></script><!--!--><!--!--><script src="https://cdn.jsdelivr.net/npm/lightgallery@1.6.8/dist/js/lightgallery.min.js" defer></script><script src="https://cdn.jsdelivr.net/npm/justifiedGallery@3.7.0/dist/js/jquery.justifiedGallery.min.js" defer></script><script>window.addEventListener("load", () => {
+            if (typeof $.fn.lightGallery === 'function') {
+                $('.article').lightGallery({ selector: '.gallery-item' });
+            }
+            if (typeof $.fn.justifiedGallery === 'function') {
+                if ($('.justified-gallery > p > .gallery-item').length) {
+                    $('.justified-gallery > p > .gallery-item').unwrap();
+                }
+                $('.justified-gallery').justifiedGallery();
+            }
+        });</script><!--!--><!--!--><!--!--><script src="/js/main.js" defer></script><div class="searchbox"><div class="searchbox-container"><div class="searchbox-header"><div class="searchbox-input-container"><input class="searchbox-input" type="text" placeholder="想要查找什么..."></div><a class="searchbox-close" href="javascript:;">×</a></div><div class="searchbox-body"></div></div></div><script src="/js/insight.js" defer></script><script>document.addEventListener('DOMContentLoaded', function () {
+            loadInsight({"contentUrl":"/content.json"}, {"hint":"想要查找什么...","untitled":"(无标题)","posts":"文章","pages":"页面","categories":"分类","tags":"标签"});
+        });</script></body></html>
